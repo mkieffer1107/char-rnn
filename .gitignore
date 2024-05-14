@@ -1,3 +1,10 @@
+note.txt
+binary_rnn.py
+binary.py
+binary_train.ipynb
+char_train.ipynb
+.DS_STORE
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,2 +1,2 @@
 # char-rnn
-Character-level RNNs trained on Shakespeare
+Learning about RNNS by making a character-level RNN trained on Shakespeare 
