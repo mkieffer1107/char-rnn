@@ -17,8 +17,6 @@ if __name__ == "__main__":
     data_path = os.path.join(DATA_DIR, f"{filename}.txt")
     print(f"Data path: {data_path}")
 
-    # Instantiate the dataset
     dataset = CharDataset(seq_length, data_path, device=device)
 
-    # Create the DataLoader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=dataset.collate_fn)
