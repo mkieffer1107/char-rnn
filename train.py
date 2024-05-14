@@ -18,5 +18,4 @@ if __name__ == "__main__":
     print(f"Data path: {data_path}")
 
     dataset = CharDataset(seq_length, data_path, device=device)
-
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=dataset.collate_fn)

@@ -5,9 +5,6 @@ language modeling
 # https://youtu.be/yCC09vCHzF8?si=Eex7cHXV6cJ_IUP_
 # https://d2l.ai/chapter_recurrent-neural-networks/bptt.html
 
-streaming
-learn how to make the output write as soon as it is calculated
-
 '''
 import torch
 import torch.nn as nn
