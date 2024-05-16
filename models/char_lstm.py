@@ -11,37 +11,30 @@ import torch.nn as nn
 from layers import LSTM
 
 class CharLSTM(nn.Module):
-    def __init__(self, hidden_size, output_size, num_layers, seq_length):
-        super.__init__()
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers, seq_length, device="cpu"):
+        super(CharLSTM).__init__()
         self.seq_length = seq_length
-
+        
+        # create the embedding layer --> maps vocab to embedding
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        
         # create the RNN layer
-        self.rnn = LSTM()
+        self.lstm = LSTM(embedding_dim, hidden_dim, num_layers, device=device)
 
         # output at time t depends on hidden state t
         # O_t = H_t @ W_ho + b_o
-        self.W_ho  = nn.Parameter(
-            torch.randn(hidden_size, output_size) * 0.01
-        )
-        self.b_o = nn.Parameter(torch.zeros(output_size)) # output bias
+        self.fc = nn.Linear(hidden_dim, vocab_size)  
 
-    def forward(self, x):
-        ...
+        # simpler to just use a linear layer ^^^
+        # self.W_ho  = nn.Parameter(
+        #     torch.randn(hidden_dim, vocab_size) * 0.01
+        # )
+        # self.b_o = nn.Parameter(torch.zeros(vocab_size)) # output bias
 
-
-# class CharLSTM(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers, device="cpu"):
-#         super(CharLSTM, self).__init__()
-#         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-#         self.lstm = CustomLSTM(embedding_dim, hidden_dim, device=device)
-#         self.fc = nn.Linear(hidden_dim, vocab_size)
-    
-#     def forward(self, x, hidden):
-#         x = self.embedding(x)
-#         out, hidden = self.lstm(x, hidden)
-#         out = self.fc(out[-1])  # Get the last output
-#         return out, hidden
-    
-#     def init_hidden(self, batch_size):
-#         return (torch.zeros(batch_size, self.lstm.hidden_size).to(self.lstm.device),
-#                 torch.zeros(batch_size, self.lstm.hidden_size).to(self.lstm.device))
+    def forward(self, x, hidden):
+        x = self.embedding(x)
+        out, hidden = self.lstm(x, hidden)
+        out = out[-1] # get the last output
+        # out = out @ self.W_ho + self.b_o
+        out = self.fc(out)
+        return out, hidden

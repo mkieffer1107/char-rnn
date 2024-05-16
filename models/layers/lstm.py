@@ -143,6 +143,148 @@ import torch
 import torch.nn as nn
 
 class LSTM(nn.Module):
+    """
+    A multi-layer LSTM cell 
+    """
+    def __init__(self, input_size, hidden_size, num_layers=1, device="cpu", dropout=0.1):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.device = device
+        self.dropout = dropout
+
+        # initialize the layers
+        self.lstm_layers = nn.ModuleList([
+            self._create_layer(input_size if i == 0 else hidden_size, hidden_size)
+            for i in range(num_layers)
+        ])
+        self.dropout = nn.Dropout(dropout)       
+
+
+    # def _create_layer(self, input_size, hidden_size):
+    #     """Create a single LSTM layer with given input and hidden size"""
+    #     layer = nn.Module()
+
+    #     # input, forget, output, and cell state gates
+    #     gates = ["i", "f", "o", "c"]
+    #     for gate in gates:
+    #         setattr(layer, f"W_x{gate}", nn.Linear(input_size, hidden_size))
+    #         setattr(layer, f"W_h{gate}", nn.Linear(hidden_size, hidden_size, bias=False))
+    #         setattr(layer, f"b_{gate}", nn.Parameter(torch.zeros(hidden_size)))
+    #     return layer
+    
+    def _create_layer(self, input_size, hidden_size):
+        """Create a single LSTM layer with given input and hidden size"""
+        layer = nn.Module()
+
+        # input, forget, output, and cell state gates
+        gates = ["i", "f", "o", "c"]
+        for gate in gates:
+            # create the weights for the input and hidden states
+            setattr(layer, f"W_x{gate}", nn.Linear(input_size, hidden_size))
+            setattr(layer, f"W_h{gate}", nn.Linear(hidden_size, hidden_size, bias=False))
+
+            # set forget gate bias to 1 to encourage the model to remember more information initially
+            bias = nn.Parameter(torch.zeros(hidden_size))
+            if gate == "f":  
+                nn.init.constant_(bias, 1.0)
+            setattr(layer, f"b_{gate}", bias)
+
+            # initialize the weights using Xavier init
+            nn.init.xavier_uniform_(getattr(layer, f"W_x{gate}").weight)
+            nn.init.xavier_uniform_(getattr(layer, f"W_h{gate}").weight)
+
+        return layer
+
+
+
+    # def to(self, device):
+    #     super().to(device)
+    #     self.device = device
+    #     return self
+    
+    def forward(self, X, H_C=None):
+        if H_C is None:
+            H = torch.zeros((X.shape[1], self.hidden_size), device=X.device)
+            C = torch.zeros((X.shape[1], self.hidden_size), device=X.device)
+        else:
+            H, C = H_C
+
+        outputs = []
+        for x_t in X:
+            # calculate gate values and internal node for each batch
+            # x_t has shape (batch_size, input_size)
+            I = torch.sigmoid(x_t @ self.W_xi + H @ self.W_hi + self.b_i)
+            F = torch.sigmoid(x_t @ self.W_xf + H @ self.W_hf + self.b_f)
+            O = torch.sigmoid(x_t @ self.W_xo + H @ self.W_ho + self.b_o)
+            C_tilde = torch.tanh(x_t @ self.W_xc + H @ self.W_hc + self.b_c)
+            
+            # update the states
+            C = F*C + I*C_tilde   # C_t = ( F_t * C_{t-1} ) + ( I_t * C~_t )
+            H = O * torch.tanh(C) # H_t = O_t * tanh(C_t)
+            
+            # apply dropout to the hidden state / output -- not to internal cell state
+            H = self.dropout(H)
+            outputs.append(H)
+        
+        # convert list of tensors to a single tensor with shape (seq_length, batch_size, hidden_size)
+        outputs = torch.stack(outputs, dim=0)
+        return outputs, (H, C)
+    
+
+    def forward(self, X, H_C=None):
+        # X has shape (seq_length, batch_size, input_size)
+        # H_C is a tuple containing the cell internal state + hidden state: (H, C)
+        #   H and C have shape (batch_size, hidden_size)
+        if H_C is None:
+            H_C = (torch.zeros((self.num_layers, X.shape[1], self.hidden_size), device=X.device),
+                   torch.zeros((self.num_layers, X.shape[1], self.hidden_size), device=X.device))
+        
+        H, C = H_C
+        outputs = []
+
+        for x_t in X:
+            # for each time step, pass the input through each layer
+            layer_outputs = []
+            for i, lstm_layer in enumerate(self.lstm_layers):
+                # get the hidden and cell states for the current layer
+                h_t = H[i]
+                c_t = C[i]
+
+                # calculate gate values and internal node for each batch
+                # x_t has shape (batch_size, input_size)
+                I = torch.sigmoid(lstm_layer.W_xi(x_t) + lstm_layer.W_hi(h_t) + lstm_layer.b_i)
+                F = torch.sigmoid(lstm_layer.W_xf(x_t) + lstm_layer.W_hf(h_t) + lstm_layer.b_f)
+                O = torch.sigmoid(lstm_layer.W_xo(x_t) + lstm_layer.W_ho(h_t) + lstm_layer.b_o)
+                C_tilde = torch.tanh(lstm_layer.W_xc(x_t) + lstm_layer.W_hc(h_t) + lstm_layer.b_c)
+
+                # update the states
+                c_t = F * c_t + I * C_tilde    # C_t = ( F_t * C_{t-1} ) + ( I_t * C~_t )
+                h_t = O * torch.tanh(c_t)      # H_t = O_t * tanh(C_t)
+                h_t = self.dropout_layer(h_t)  # apply dropout to the hidden state / output -- not to internal cell state
+
+                # save the updated states
+                H[i] = h_t
+                C[i] = c_t
+
+                # save the output of the current layer
+                x_t = h_t
+                layer_outputs.append(h_t)
+
+            # save the output of the current time step
+            outputs.append(layer_outputs[-1])
+
+        # convert list of tensors to a single tensor with shape (seq_length, batch_size, hidden_size)
+        outputs = torch.stack(outputs, dim=0)
+        return outputs, (H, C)
+    
+
+
+
+class SimpleLSTM(nn.Module):
+    """
+    My initial single-layer LSTM, kept here for reference
+    """
     def __init__(self, input_size, hidden_size, device="cpu", dropout=0.1, sigma=0.01):
         super().__init__()
         self.dropout = dropout

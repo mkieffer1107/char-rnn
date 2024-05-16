@@ -36,8 +36,8 @@ class CharDataset(Dataset):
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return a single sample from the dataset"""
-        inputs = self.encoded_data[idx:idx+self.seq_length]
-        targets = self.encoded_data[idx+self.seq_length]
+        inputs = self.encoded_data[idx:idx+self.seq_length] # context window
+        targets = self.encoded_data[idx+self.seq_length]    # next character
         return torch.tensor(inputs, dtype=torch.long).to(self.device), torch.tensor(targets, dtype=torch.long).to(self.device)
 
     def _read_data(self, data_path: str) -> str:
